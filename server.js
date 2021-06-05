@@ -12,6 +12,9 @@ const PORT = process.env.PORT || 8080
 const clients = []
 const connections = [];
 
+const messages = [];
+let msgCout = 0;
+
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"))
 })
@@ -27,24 +30,33 @@ app.post("/enter", (req, res) => {
         color: getRandomColor(),
     }
     clients.push(c)
-    res.send({ok: true, data: c.name})
+    res.send({ok: true, data: c.name, last: msgCout - 1})
 })
 
 app.get("/chat", (req, res) => {
-    connections.push(res);
+    if (req.query.last != msgCout - 1) {
+        const m = messages.filter(m => m.id > parseInt(req.query.last))
+        res.send({multi: m})
+    } else connections.push(res);
 })
 
 app.post("/sendMsg", (req, res) => {
     console.log("aaa", req.body)
     const client = getClient(req.body.name)
     const msg = req.body.message;
+    if (msg.length == 0) {res.end(); return}
     if (msg.startsWith("/")) {
         command(client, msg, res)
     } else {
+        messages.push({id: msgCout, msg: {from: client, message: msg}})
+        if (messages.length > 100) {
+            messages.shift()
+        }
         connections.forEach((c, index) => {
-            c.send({from: client, message: msg})
+            c.send({id: msgCout, msg: {from: client, message: msg}})
         })
         connections.length = 0
+        msgCout++;
         res.end();
     }
 })
